@@ -7,7 +7,7 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 800px;
+            max-width: 900px;
             margin: 50px auto;
             padding: 20px;
         }
@@ -15,7 +15,7 @@
             color: #333;
         }
         .section {
-            margin-bottom: 40px;
+            margin-bottom: 30px;
             border: 1px solid #ddd;
             padding: 20px;
         }
@@ -34,6 +34,12 @@
         button:hover {
             background-color: #45a049;
         }
+        .logout-btn {
+            background-color: #f44336;
+        }
+        .logout-btn:hover {
+            background-color: #da190b;
+        }
         #bookingsList {
             margin-top: 20px;
         }
@@ -43,39 +49,179 @@
             margin: 10px 0;
             border-left: 4px solid #4CAF50;
         }
+        .auth-info {
+            background: #e3f2fd;
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        .hidden {
+            display: none;
+        }
+        .error {
+            color: red;
+            margin: 10px 0;
+        }
+        .success {
+            color: green;
+            margin: 10px 0;
+        }
     </style>
 </head>
 <body>
     <h1>Booking Service</h1>
 
-    <!-- Create Booking Form -->
-    <div class="section">
-        <h2>Create New Booking</h2>
-        <input type="text" id="customerName" placeholder="Customer Name" required>
-        <select id="serviceName">
-            <option value="Haircut">Haircut</option>
-            <option value="Massage">Massage</option>
-            <option value="Consultation">Consultation</option>
-            <option value="Manicure">Manicure</option>
-            <option value="Training">Training</option>
-        </select>
-        <input type="datetime-local" id="bookingDate" required>
-        <input type="number" id="duration" placeholder="Duration (minutes)" min="15" required>
-        <input type="number" id="price" placeholder="Price" min="0" required>
-        <input type="email" id="customerEmail" placeholder="Email" required>
-        <input type="text" id="notes" placeholder="Notes (optional)">
-        <button onclick="createBooking()">Create Booking</button>
+    <div id="authSection">
+        <!-- Login Form -->
+        <div class="section" id="loginSection">
+            <h2>Login</h2>
+            <input type="email" id="loginEmail" placeholder="Email" required>
+            <input type="password" id="loginPassword" placeholder="Password" required>
+            <button onclick="login()">Login</button>
+            <div id="loginError" class="error"></div>
+        </div>
+
+        <!-- Register Form -->
+        <div class="section" id="registerSection">
+            <h2>Register</h2>
+            <input type="email" id="regEmail" placeholder="Email" required>
+            <input type="password" id="regPassword" placeholder="Password (min 6 chars)" required>
+            <select id="regRole">
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+            </select>
+            <button onclick="register()">Register</button>
+            <div id="registerError" class="error"></div>
+        </div>
     </div>
 
-    <!-- Bookings List -->
-    <div class="section">
-        <h2>All Bookings</h2>
-        <button onclick="loadBookings()">Refresh List</button>
-        <div id="bookingsList"></div>
+    <!-- Main Content (shown after login) -->
+    <div id="mainContent" class="hidden">
+        <div class="auth-info">
+            <strong>Logged in as:</strong> <span id="userEmail"></span> (<span id="userRole"></span>)
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+
+        <!-- Create Booking Form (admin only) -->
+        <div class="section" id="createBookingSection">
+            <h2>Create New Booking</h2>
+            <input type="text" id="customerName" placeholder="Customer Name" required>
+            <select id="serviceName">
+                <option value="Haircut">Haircut</option>
+                <option value="Massage">Massage</option>
+                <option value="Consultation">Consultation</option>
+                <option value="Manicure">Manicure</option>
+                <option value="Training">Training</option>
+            </select>
+            <input type="datetime-local" id="bookingDate" required>
+            <input type="number" id="duration" placeholder="Duration (minutes)" min="15" required>
+            <input type="number" id="price" placeholder="Price" min="0" required>
+            <input type="email" id="customerEmail" placeholder="Email" required>
+            <input type="text" id="notes" placeholder="Notes (optional)">
+            <button onclick="createBooking()">Create Booking</button>
+            <div id="createError" class="error"></div>
+            <div id="createSuccess" class="success"></div>
+        </div>
+
+        <!-- Bookings List -->
+        <div class="section">
+            <h2>All Bookings</h2>
+            <button onclick="loadBookings()">Refresh List</button>
+            <div id="bookingsList"></div>
+        </div>
     </div>
 
     <script>
         const API_URL = 'http://localhost:3000';
+        let token = localStorage.getItem('token');
+        let currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+
+        window.onload = function() {
+            if (token) {
+                showMainContent();
+                loadBookings();
+            }
+        };
+
+        async function register() {
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+            const role = document.getElementById('regRole').value;
+
+            try {
+                const response = await fetch(`${API_URL}/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password, role })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('registerError').textContent = '';
+                    alert('Registration successful! Please login.');
+                    document.getElementById('regEmail').value = '';
+                    document.getElementById('regPassword').value = '';
+                } else {
+                    document.getElementById('registerError').textContent = data.error;
+                }
+            } catch (error) {
+                document.getElementById('registerError').textContent = 'Error: ' + error.message;
+            }
+        }
+
+        async function login() {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+
+            try {
+                const response = await fetch(`${API_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    token = data.token;
+                    currentUser = data.user;
+                    localStorage.setItem('token', token);
+                    localStorage.setItem('user', JSON.stringify(currentUser));
+                    
+                    document.getElementById('loginError').textContent = '';
+                    showMainContent();
+                    loadBookings();
+                } else {
+                    document.getElementById('loginError').textContent = data.error;
+                }
+            } catch (error) {
+                document.getElementById('loginError').textContent = 'Error: ' + error.message;
+            }
+        }
+
+        function logout() {
+            token = null;
+            currentUser = {};
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            
+            document.getElementById('authSection').classList.remove('hidden');
+            document.getElementById('mainContent').classList.add('hidden');
+        }
+
+        function showMainContent() {
+            document.getElementById('authSection').classList.add('hidden');
+            document.getElementById('mainContent').classList.remove('hidden');
+            document.getElementById('userEmail').textContent = currentUser.email;
+            document.getElementById('userRole').textContent = currentUser.role;
+
+            if (currentUser.role !== 'admin') {
+                document.getElementById('createBookingSection').classList.add('hidden');
+            } else {
+                document.getElementById('createBookingSection').classList.remove('hidden');
+            }
+        }
 
         async function createBooking() {
             const booking = {
@@ -91,23 +237,32 @@
             try {
                 const response = await fetch(`${API_URL}/bookings`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
                     body: JSON.stringify(booking)
                 });
+
+                const data = await response.json();
                 
                 if (response.ok) {
-                    alert('Booking created successfully!');
+                    document.getElementById('createError').textContent = '';
+                    document.getElementById('createSuccess').textContent = 'Booking created successfully!';
                     document.getElementById('customerName').value = '';
                     document.getElementById('duration').value = '';
                     document.getElementById('price').value = '';
                     document.getElementById('customerEmail').value = '';
                     document.getElementById('notes').value = '';
                     loadBookings();
+                    setTimeout(() => {
+                        document.getElementById('createSuccess').textContent = '';
+                    }, 3000);
                 } else {
-                    alert('Error creating booking');
+                    document.getElementById('createError').textContent = data.error;
                 }
             } catch (error) {
-                alert('Error: ' + error.message);
+                document.getElementById('createError').textContent = 'Error: ' + error.message;
             }
         }
 
@@ -119,6 +274,11 @@
                 const listDiv = document.getElementById('bookingsList');
                 listDiv.innerHTML = '';
                 
+                if (bookings.length === 0) {
+                    listDiv.innerHTML = '<p>No bookings found.</p>';
+                    return;
+                }
+                
                 bookings.forEach(booking => {
                     const div = document.createElement('div');
                     div.className = 'booking-item';
@@ -126,16 +286,15 @@
                         <strong>${booking.customerName}</strong> - ${booking.serviceName}<br>
                         Date: ${new Date(booking.bookingDate).toLocaleString()}<br>
                         Duration: ${booking.duration} min | Price: $${booking.price}<br>
-                        Status: ${booking.status}
+                        Status: ${booking.status}<br>
+                        Email: ${booking.customerEmail}
                     `;
                     listDiv.appendChild(div);
                 });
             } catch (error) {
-                alert('Error loading bookings: ' + error.message);
+                console.error('Error loading bookings:', error);
             }
         }
-
-        window.onload = loadBookings;
     </script>
 </body>
 </html>
